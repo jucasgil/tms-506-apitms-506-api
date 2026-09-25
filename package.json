@@ -1,0 +1,23 @@
+{
+  "name": "tms-506-api",
+  "version": "1.0.0",
+  "description": "API de integración OMS y TMS interno — Transportadora 506",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "node --test test/*.test.js",
+    "crear-api-key": "node scripts/crear-api-key.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "bwip-js": "^4.11.4",
+    "express": "^5.2.1",
+    "pdfkit": "^0.20.2",
+    "qrcode": "^1.5.4"
+  },
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  }
+}
