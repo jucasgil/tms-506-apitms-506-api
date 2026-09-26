@@ -92,19 +92,45 @@ test('normaliza abreviaturas de direcciones colombianas', () => {
   assert.equal(normalizarDireccion('Cl. 26 Sur # 10-20'), 'Calle 26 Sur # 10-20');
 });
 
-test('geocodificador: arma la consulta a Google y marca revisión si es aproximada', async () => {
+test('geocodificador: restringe a la ciudad y marca revisión si es aproximada', async () => {
   let urlLlamada;
   const geo = createGeocoder({
     apiKey: 'K',
     fetchImpl: async (url) => {
-      urlLlamada = url;
-      return { json: async () => ({ status: 'OK', results: [{ formatted_address: 'Cra. 15 #93-47, Bogotá', partial_match: true, geometry: { location: { lat: 4.68, lng: -74.05 }, location_type: 'ROOFTOP' } }] }) };
+      urlLlamada = decodeURIComponent(url);
+      return { json: async () => ({ status: 'OK', results: [{ formatted_address: 'Cra. 15 #93-47, Bogotá, Colombia', partial_match: true,
+        address_components: [{ long_name: 'Bogotá', short_name: 'Bogotá', types: ['locality', 'political'] }],
+        geometry: { location: { lat: 4.68, lng: -74.05 }, location_type: 'ROOFTOP' } }] }) };
     },
   });
   const r = await geo({ direccion: 'cra 15 # 93-47', ciudad: 'Bogotá', departamento: 'Cundinamarca' });
-  assert.ok(urlLlamada.includes('components=country:CO'));
-  assert.ok(decodeURIComponent(urlLlamada).includes('Carrera 15'));
+  assert.ok(urlLlamada.includes('components=country:CO|locality:Bogotá'));
+  assert.ok(urlLlamada.includes('Carrera 15'));
+  assert.ok(urlLlamada.includes('Bogotá D.C.'));
+  assert.ok(!urlLlamada.includes('Cundinamarca'), 'Bogotá no debe mezclarse con Cundinamarca');
   assert.equal(r.requiere_revision, true);
+});
+
+test('geocodificador: si Google devuelve otro municipio (Zipaquirá) lo marca para revisión', async () => {
+  const zipa = { formatted_address: 'Cra. 11 #82-71, Zipaquirá, Cundinamarca, Colombia',
+    address_components: [{ long_name: 'Zipaquirá', short_name: 'Zipaquirá', types: ['locality'] }, { long_name: 'Cundinamarca', short_name: 'Cundinamarca', types: ['administrative_area_level_1'] }],
+    geometry: { location: { lat: 5.02, lng: -73.99 }, location_type: 'ROOFTOP' } };
+  const bog = { formatted_address: 'Cra. 11 #82-71, Bogotá, Colombia',
+    address_components: [{ long_name: 'Bogotá', short_name: 'Bogotá', types: ['locality'] }, { long_name: 'Bogotá, D.C.', short_name: 'Bogotá, D.C.', types: ['administrative_area_level_1'] }],
+    geometry: { location: { lat: 4.667, lng: -74.052 }, location_type: 'ROOFTOP' } };
+  const solo = (res) => createGeocoder({ apiKey: 'K', fetchImpl: async () => ({ json: async () => ({ status: 'OK', results: res }) }) });
+
+  const malo = await solo([zipa])({ direccion: 'Carrera 11 # 82-71', ciudad: 'Bogotá', departamento: 'Cundinamarca' });
+  assert.equal(malo.requiere_revision, true);
+  assert.equal(malo.precision, 'OTRA_CIUDAD');
+
+  const bueno = await solo([zipa, bog])({ direccion: 'Carrera 11 # 82-71', ciudad: 'Bogotá', departamento: 'Cundinamarca' });
+  assert.equal(bueno.lat, 4.667); // elige el resultado que sí está en Bogotá
+  assert.equal(bueno.requiere_revision, false);
+
+  const medellin = await solo([{ formatted_address: 'Cl. 10 #43-20, Medellín, Antioquia, Colombia',
+    address_components: [{ long_name: 'Medellín', short_name: 'Medellín', types: ['locality'] }], geometry: { location: { lat: 6.2, lng: -75.5 }, location_type: 'ROOFTOP' } }])({ direccion: 'Calle 10 # 43-20', ciudad: 'Medellin', departamento: 'Antioquia' });
+  assert.equal(medellin.requiere_revision, false); // tildes no afectan la comparación
 });
 
 test('Google Routes: envía optimizeWaypointOrder y reordena según el índice devuelto', async () => {

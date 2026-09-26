@@ -253,6 +253,14 @@ function adminRouter(deps) {
       lat: geo.lat, lng: geo.lng, principal: Boolean(b.principal), activa: true,
     }));
   });
+  r.post('/bodegas/:id/reubicar', soloAdmin, async (req, res) => {
+    const b = (await db.listarBodegas()).find((x) => x.id === req.params.id);
+    if (!b) throw errores.noEncontrado('Bodega no encontrada');
+    const direccion = texto(req.body?.direccion) || b.direccion;
+    const ciudad = texto(req.body?.ciudad) || b.ciudad;
+    const geo = await geocodificar({ direccion, ciudad });
+    res.json({ ...(await db.actualizarBodega(b.id, { direccion, ciudad, lat: geo.lat, lng: geo.lng })), direccion_google: geo.direccion_formateada, requiere_revision: geo.requiere_revision });
+  });
   r.patch('/bodegas/:id', soloAdmin, async (req, res) => {
     const c = {};
     if ('principal' in req.body) c.principal = Boolean(req.body.principal);

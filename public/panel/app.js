@@ -529,7 +529,7 @@
           <div class="field"><label>Celular *</label><input class="input" name="telefono" placeholder="300 123 4567" required></div>
           <div class="field span-2"><label>Dirección *</label><input class="input" name="direccion" placeholder="Cra 15 # 93-47 Apto 301" required></div>
           <div class="field"><label>Ciudad *</label><input class="input" name="ciudad" value="Bogotá" required></div>
-          <div class="field"><label>Departamento *</label><input class="input" name="departamento" value="Cundinamarca" required></div>
+          <div class="field"><label>Departamento *</label><input class="input" name="departamento" value="Bogotá D.C." required></div>
           <div class="field"><label>Referencia</label><input class="input" name="referencia" placeholder="Torre, conjunto, portería…"></div>
           <div class="field"><label>Instrucciones</label><input class="input" name="instrucciones" placeholder="Llamar antes de llegar"></div>
         </div>
@@ -739,13 +739,29 @@
   async function vistaBodegas(c) {
     const lista = await api('GET', '/bodegas');
     c.innerHTML = `<div class="row" style="margin-bottom:14px"><span class="muted grow">La bodega principal es el punto de salida y regreso de todas las rutas.</span>${S.esAdmin ? `<button class="btn btn-primary" id="nuevo">${icon('plus')} Nueva bodega</button>` : ''}</div>
-      <div class="card"><div class="table-wrap"><table class="tbl"><thead><tr><th>Bodega</th><th>Dirección</th><th>Coordenadas</th><th>Principal</th><th>Activa</th></tr></thead><tbody>
+      <div class="card"><div class="table-wrap"><table class="tbl"><thead><tr><th>Bodega</th><th>Dirección</th><th>Coordenadas</th><th>Principal</th><th>Activa</th><th></th></tr></thead><tbody>
       ${lista.length ? lista.map((b) => `<tr><td><b>${esc(b.nombre)}</b></td><td>${esc(b.direccion)}, ${esc(b.ciudad)}</td><td class="mono small">${Number(b.lat).toFixed(5)}, ${Number(b.lng).toFixed(5)}</td>
         <td>${b.principal ? '<span class="badge b-green">Principal</span>' : S.esAdmin ? `<button class="btn btn-sm" data-pri="${b.id}">${icon('star')} Hacer principal</button>` : '—'}</td>
-        <td><label class="switch"><input type="checkbox" data-act="${b.id}" ${b.activa ? 'checked' : ''} ${S.esAdmin ? '' : 'disabled'}><span></span></label></td></tr>`).join('')
-        : '<tr><td colspan="5"><div class="empty">Aún no hay bodegas. Mientras tanto, las rutas salen del punto configurado en Vercel (DEPOSITO_LAT / DEPOSITO_LNG).</div></td></tr>'}
+        <td><label class="switch"><input type="checkbox" data-act="${b.id}" ${b.activa ? 'checked' : ''} ${S.esAdmin ? '' : 'disabled'}><span></span></label></td>
+        <td>${S.esAdmin ? `<button class="btn btn-sm" data-reu="${b.id}" data-dir="${esc(b.direccion)}" data-ciu="${esc(b.ciudad)}">Reubicar</button>` : ''}</td></tr>`).join('')
+        : '<tr><td colspan="6"><div class="empty">Aún no hay bodegas. Mientras tanto, las rutas salen del punto configurado en Vercel (DEPOSITO_LAT / DEPOSITO_LNG).</div></td></tr>'}
       </tbody></table></div></div>`;
     $$('[data-pri]', c).forEach((b) => (b.onclick = () => conBoton(b, async () => { await api('PATCH', `/bodegas/${b.dataset.pri}`, { principal: true }); toast('Bodega principal actualizada'); vistaBodegas(c); })));
+    $$('[data-reu]', c).forEach((b) => (b.onclick = () => {
+      const m = abrirCapa(`${cabecera('Reubicar bodega', 'Vuelve a ubicar la dirección con Google')}<form><div class="modal-body"><div class="grid-2">
+        <div class="field span-2"><label>Dirección</label><input class="input" name="direccion" value="${esc(b.dataset.dir)}" required></div>
+        <div class="field"><label>Ciudad</label><input class="input" name="ciudad" value="${esc(b.dataset.ciu)}" required></div>
+      </div></div><div class="modal-foot"><button type="button" class="btn" data-cerrar>Cancelar</button><button class="btn btn-primary">Ubicar</button></div></form>`);
+      $('form', m.el).onsubmit = async (e) => {
+        e.preventDefault();
+        await conBoton($('.btn-primary', m.el), async () => {
+          const r = await api('POST', `/bodegas/${b.dataset.reu}/reubicar`, Object.fromEntries(new FormData(e.target)));
+          m.cerrar();
+          toast(r.requiere_revision ? `Ubicada en: ${r.direccion_google}. Revisa que sea correcta.` : `Ubicada en: ${r.direccion_google}`, r.requiere_revision);
+          vistaBodegas(c);
+        });
+      };
+    }));
     $$('[data-act]', c).forEach((cb) => (cb.onchange = async () => { try { await api('PATCH', `/bodegas/${cb.dataset.act}`, { activa: cb.checked }); toast('Bodega actualizada'); } catch (e) { cb.checked = !cb.checked; fallo(e); } }));
     const nb = $('#nuevo');
     if (nb) nb.onclick = () => {
@@ -753,7 +769,7 @@
         <div class="field span-2"><label>Nombre *</label><input class="input" name="nombre" required></div>
         <div class="field span-2"><label>Dirección *</label><input class="input" name="direccion" required></div>
         <div class="field"><label>Ciudad *</label><input class="input" name="ciudad" value="Bogotá" required></div>
-        <div class="field"><label>Departamento</label><input class="input" name="departamento" value="Cundinamarca"></div>
+        <div class="field"><label>Departamento</label><input class="input" name="departamento" value="Bogotá D.C."></div>
         <label class="check span-2"><input type="checkbox" name="principal" ${lista.length ? '' : 'checked'}> Bodega principal (salida de las rutas)</label>
       </div></div><div class="modal-foot"><button type="button" class="btn" data-cerrar>Cancelar</button><button class="btn btn-primary">Guardar</button></div></form>`);
       $('form', m.el).onsubmit = async (e) => {
