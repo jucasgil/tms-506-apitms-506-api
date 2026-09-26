@@ -1,8 +1,10 @@
 const express = require('express');
+const path = require('path');
 const { ApiError } = require('./lib/errores');
 const { pedidosRouter } = require('./routes/pedidos');
 const { internosRouter } = require('./routes/internos');
 const { rastreoRouter } = require('./routes/rastreo');
+const { adminRouter } = require('./routes/admin');
 
 // Las dependencias se inyectan para poder probar la app sin servicios reales
 function createApp(deps) {
@@ -25,7 +27,13 @@ function createApp(deps) {
 
   app.use('/v1/pedidos', pedidosRouter(deps));
   app.use('/v1/internos', internosRouter(deps));
+  app.use('/v1/admin', adminRouter(deps));
   app.use(rastreoRouter(deps));
+
+  // Panel web del TMS
+  const panel = path.join(__dirname, '..', 'public', 'panel');
+  app.get('/', (_req, res) => res.redirect('/panel'));
+  app.use('/panel', express.static(panel, { index: 'index.html', maxAge: '5m' }));
 
   app.use((_req, res) => res.status(404).json({ error: 'no_encontrado', mensaje: 'Ruta no existe' }));
 

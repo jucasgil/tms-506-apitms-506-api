@@ -4,7 +4,7 @@
     {
       "src": "index.js",
       "use": "@vercel/node",
-      "config": { "includeFiles": ["node_modules/pdfkit/js/data/**", "node_modules/bwip-js/**"] }
+      "config": { "includeFiles": ["node_modules/pdfkit/js/data/**", "node_modules/bwip-js/**", "public/**"] }
     }
   ],
   "routes": [{ "src": "/(.*)", "dest": "/index.js" }]

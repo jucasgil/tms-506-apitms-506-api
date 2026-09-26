@@ -1,5 +1,6 @@
 // Dependencias simuladas para probar la API sin Supabase, Google ni Twilio reales.
 const { hashApiKey } = require('../src/lib/calculos');
+const { hashPassword } = require('../src/lib/sesion');
 const { errores } = require('../src/lib/errores');
 const { generarGuiaPdf } = require('../src/services/guiaPdf');
 const { createApp } = require('../src/app');
@@ -10,7 +11,8 @@ const SECRETO = 'secreto-interno';
 function fakeDb() {
   const s = {
     apiKeys: [{ id: 'cli-1', cliente_nombre: 'OMS Demo', api_key_hash: hashApiKey(API_KEY), webhook_secret: 'whsec_demo', activa: true }],
-    pedidos: [], eventos: [], viajes: [], cola: [], pdfs: {}, seq: 0,
+    pedidos: [], eventos: [], viajes: [], cola: [], pdfs: {}, seq: 0, bodegas: [],
+    usuarios: [{ id: 'u1', email: 'admin@506.co', nombre: 'Admin', rol: 'admin', activo: true, password_hash: hashPassword('clave-segura-1') }],
     conductores: [
       { id: 'c1', nombre: 'Carlos Ramírez', zona: 'Norte', capacidad_kg: 50, activo: true },
       { id: 'c2', nombre: 'Ana Gómez', zona: 'Sur', capacidad_kg: 50, activo: true },
@@ -43,7 +45,7 @@ function fakeDb() {
     },
     pedidosParaRutear: async () => s.pedidos.filter((p) => ['guia_generada', 'reagendado'].includes(p.estado) && !p.conductor_id),
     conductoresActivos: async () => s.conductores.filter((c) => c.activo),
-    crearViaje: async (f) => { const v = { id: `v${s.viajes.length + 1}`, ...f }; s.viajes.push(v); return v; },
+    crearViaje: async (f) => { const v = { id: `v${s.viajes.length + 1}`, estado: 'planificado', ...f }; s.viajes.push(v); return v; },
     asignarPedidos: async (ids, cid, vid) => ids.forEach((id) => {
       Object.assign(s.pedidos.find((p) => p.id === id), { conductor_id: cid, viaje_id: vid, estado: 'asignado' });
       s.eventos.push({ pedido_id: id, estado: 'asignado', creado_en: new Date().toISOString() }); // como el trigger real
@@ -52,6 +54,37 @@ function fakeDb() {
     webhooksVencidos: async () => s.cola.filter((w) => !w.entregado && !w.agotado),
     actualizarWebhook: async (id, c) => Object.assign(s.cola.find((w) => w.id === id), c),
     subirPdf: async (ruta, buf) => { s.pdfs[ruta] = buf; return `https://cdn.test/guias/${ruta}`; },
+
+    // Panel
+    usuarioPorEmail: async (e) => s.usuarios.find((u) => u.email === e && u.activo) || null,
+    listarUsuarios: async () => s.usuarios.map(({ password_hash, ...u }) => u),
+    crearUsuario: async (f) => { const u = { id: `u${s.usuarios.length + 1}`, ...f }; s.usuarios.push(u); return u; },
+    actualizarUsuario: async (id, c) => Object.assign(s.usuarios.find((u) => u.id === id), c),
+    listarPedidos: async ({ estado } = {}) => {
+      const filas = s.pedidos.filter((p) => !estado || estado.split(',').includes(p.estado));
+      return { filas, total: filas.length };
+    },
+    pedidosActivos: async () => s.pedidos.filter((p) => !['entregado', 'devuelto', 'cancelado'].includes(p.estado)),
+    pedidosActualizadosDesde: async () => s.pedidos,
+    listarConductores: async () => s.conductores,
+    crearConductor: async (f) => { const c = { id: `c${s.conductores.length + 1}`, ...f }; s.conductores.push(c); return c; },
+    actualizarConductor: async (id, c) => Object.assign(s.conductores.find((x) => x.id === id), c),
+    listarViajes: async () => s.viajes,
+    viajePorId: async (id) => s.viajes.find((v) => v.id === id) || null,
+    actualizarViaje: async (id, c) => Object.assign(s.viajes.find((v) => v.id === id), c),
+    actualizarPedidosDeViaje: async (vid, origen, c) => {
+      const ps = s.pedidos.filter((p) => p.viaje_id === vid && origen.includes(p.estado));
+      ps.forEach((p) => Object.assign(p, c));
+      return ps.map((p) => ({ id: p.id }));
+    },
+    listarClientes: async () => s.apiKeys.map(({ api_key_hash, webhook_secret, ...c }) => c),
+    clienteInterno: async () => ({ id: 'cli-interno', cliente_nombre: 'Venta directa' }),
+    crearCliente: async (f) => { const c = { id: `cli-${s.apiKeys.length + 1}`, activa: true, ...f }; s.apiKeys.push(c); return { id: c.id, cliente_nombre: c.cliente_nombre, entorno: c.entorno, activa: true }; },
+    actualizarCliente: async (id, c) => Object.assign(s.apiKeys.find((k) => k.id === id), c),
+    listarBodegas: async () => s.bodegas,
+    bodegaPrincipal: async () => s.bodegas.find((b) => b.principal) || null,
+    crearBodega: async (f) => { const b = { id: `b${s.bodegas.length + 1}`, ...f }; s.bodegas.push(b); return b; },
+    actualizarBodega: async (id, c) => Object.assign(s.bodegas.find((b) => b.id === id), c),
   };
 }
 

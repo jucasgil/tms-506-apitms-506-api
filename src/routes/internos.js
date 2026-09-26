@@ -1,7 +1,7 @@
 // Endpoints que NO usan los clientes OMS: los llaman Supabase (trigger y pg_cron) y el dashboard del despachador.
 const express = require('express');
 const { internalAuth } = require('../middleware/auth');
-const { asignarPedidos } = require('../services/asignacion');
+const { planificarRutas } = require('../services/planificacion');
 const { construirPayload, proximoIntento } = require('../services/webhooks');
 const { resolverNovedad } = require('../services/novedades');
 const { fechaHoyColombia } = require('../lib/calculos');
@@ -33,8 +33,10 @@ function internosRouter({ db, ordenarParadas, enviarWebhook, notificar, config, 
 
     // 1) Webhook al OMS: primer intento inmediato, si falla queda en cola de reintentos
     const payload = construirPayload(pedido, now());
-    const envio = await enviarWebhook(pedido.webhook_url, payload, pedido.cliente?.webhook_secret);
-    resultado.webhook = envio.ok ? 'entregado' : 'en_cola';
+    const envio = pedido.webhook_url
+      ? await enviarWebhook(pedido.webhook_url, payload, pedido.cliente?.webhook_secret)
+      : { ok: true, sinWebhook: true };
+    resultado.webhook = envio.sinWebhook ? 'sin_webhook' : envio.ok ? 'entregado' : 'en_cola';
     if (!envio.ok) {
       await db.encolarWebhook({
         pedido_id: pedido.id,
@@ -86,41 +88,7 @@ function internosRouter({ db, ordenarParadas, enviarWebhook, notificar, config, 
 
   // ── Planificación del día: reparte pedidos y ordena paradas con Google Routes ──
   r.post('/rutas/optimizar', async (req, res) => {
-    const fecha = req.body?.fecha || fechaHoyColombia(now());
-    const [pedidos, conductores] = await Promise.all([db.pedidosParaRutear(fecha), db.conductoresActivos()]);
-    const { rutas, sinAsignar } = asignarPedidos(pedidos, conductores, { maxParadas: config.rutas.maxParadas });
-
-    const viajes = [];
-    const errores = [];
-    for (const ruta of rutas) {
-      try {
-        const orden = await ordenarParadas(config.deposito, ruta.pedidos);
-        const viaje = await db.crearViaje({
-          fecha,
-          conductor_id: ruta.conductor.id,
-          secuencia: orden.secuencia.map((p, i) => ({
-            orden: i + 1, pedido_id: p.id, guia_numero: p.guia_numero, zona: p.zona, lat: p.lat, lng: p.lng,
-            destinatario: p.destinatario?.nombre, direccion: p.entrega?.direccion,
-          })),
-          total_paradas: orden.secuencia.length,
-          km_totales: orden.km,
-          duracion_min: orden.duracion_min,
-          kg_totales: ruta.kg,
-        });
-        await db.asignarPedidos(ruta.pedidos.map((p) => p.id), ruta.conductor.id, viaje.id);
-        viajes.push({ viaje_id: viaje.id, conductor: ruta.conductor.nombre, paradas: orden.secuencia.length, km: orden.km, duracion_min: orden.duracion_min });
-      } catch (e) {
-        errores.push({ conductor: ruta.conductor.nombre, error: e.message });
-      }
-    }
-
-    res.json({
-      fecha,
-      pedidos_considerados: pedidos.length,
-      viajes,
-      sin_asignar: sinAsignar.map((p) => ({ guia_numero: p.guia_numero, zona: p.zona })),
-      errores,
-    });
+    res.json(await planificarRutas({ db, ordenarParadas, config }, req.body?.fecha || fechaHoyColombia(now())));
   });
 
   return r;

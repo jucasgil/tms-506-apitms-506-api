@@ -4,7 +4,7 @@ const SERVICIOS = ['estandar', 'express', 'same_day'];
 const esTexto = (v) => typeof v === 'string' && v.trim().length > 0;
 const esNumeroPositivo = (v) => typeof v === 'number' && Number.isFinite(v) && v > 0;
 
-function validarPedido(body) {
+function validarPedido(body, { requiereWebhook = true } = {}) {
   const e = [];
   if (!body || typeof body !== 'object') return ['El cuerpo debe ser un objeto JSON'];
 
@@ -31,8 +31,9 @@ function validarPedido(body) {
   if (s.contra_entrega === true && !esNumeroPositivo(s.valor_recaudo))
     e.push('servicio.valor_recaudo es requerido cuando contra_entrega es true');
 
-  if (!esTexto(body.webhook_url)) e.push('webhook_url es requerido');
-  else {
+  if (!esTexto(body.webhook_url)) {
+    if (requiereWebhook) e.push('webhook_url es requerido');
+  } else {
     try {
       const u = new URL(body.webhook_url);
       if (u.protocol !== 'https:') e.push('webhook_url debe usar HTTPS');

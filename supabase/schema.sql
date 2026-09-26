@@ -199,7 +199,7 @@ alter table webhook_pendientes enable row level security;
 -- CONFIGURACIÓN — reemplaza los valores y ejecuta este bloque
 -- ═══════════════════════════════════════════════════════════════════════════
 insert into config (clave, valor) values
-  ('backend_url', 'https://tms-506-api.vercel.app'),   -- cámbiala si Vercel asigna otra URL
+  ('backend_url', 'https://tms-506-apitms-506-api.vercel.app'),   -- cámbiala si Vercel asigna otra URL
   ('internal_secret', '8fedfc0a8e34ca58d2b19c2a08f4120da125fc7a16ad75e863390973fc2075b2')
 on conflict (clave) do update set valor = excluded.valor;
 

@@ -15,9 +15,13 @@ Backend Node.js/Express que recibe pedidos de los OMS clientes, genera la guía 
 | `POST` | `/v1/internos/reintentar-webhooks` | pg_cron de Supabase, cada minuto |
 | `GET` | `/health` | Monitoreo |
 
+## Panel del TMS
+
+`/panel` — interfaz para despachadores y administradores: resumen del día, monitoreo en mapa, órdenes (asignar, despachar, entregar, novedades, corregir direcciones), nueva orden manual, rutero (optimizar, iniciar y deshacer rutas), mensajeros, sellers (crear llaves de API), bodegas y usuarios. Su API está en `/v1/admin` y requiere iniciar sesión.
+
 ## Puesta en marcha
 
-1. **Supabase** → SQL Editor → pegar `supabase/schema.sql` → Run. Luego actualizar el bloque *CONFIGURACIÓN* del final con la URL de Vercel y el `INTERNAL_SECRET`, y ejecutarlo.
+1. **Supabase** → SQL Editor → pegar `supabase/schema.sql` → Run. Luego, en una consulta nueva, `supabase/migracion-002-panel.sql` → Run. Luego actualizar el bloque *CONFIGURACIÓN* del final con la URL de Vercel y el `INTERNAL_SECRET`, y ejecutarlo.
 2. **GitHub** → subir esta carpeta (sin `node_modules`) a un repositorio nuevo.
 3. **Vercel** → New Project → importar el repo → cargar las variables de `.env.example` → Deploy.
 4. **Primer cliente** → `SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run crear-api-key -- "Nombre del cliente" sandbox`.
