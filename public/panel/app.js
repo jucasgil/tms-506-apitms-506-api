@@ -321,7 +321,7 @@
         <span><i class="dot" style="background:#fff;border:2px solid #FF7A1A"></i>Revisar dirección</span>
       </div><span class="grow"></span><span class="muted small" id="mcount"></span><button class="btn btn-sm" id="mref">${icon('refresh')} Actualizar</button></div>
       <div id="mapa" class="map map-lg"></div></div>
-      <p class="muted small" style="margin-top:10px">La ubicación en vivo de cada mensajero se activará con la app del conductor.</p>`;
+      <p class="muted small" style="margin-top:10px">Los mensajeros aparecen en el mapa mientras tienen la app abierta (última ubicación de las 2 horas recientes).</p>`;
     const d = await api('GET', '/mapa');
     const mapa = crearMapa($('#mapa'), d.deposito);
     const capa = L.layerGroup().addTo(mapa);
@@ -337,7 +337,12 @@
           fillColor: COLOR_ESTADO[p.estado] || '#8796A8', fillOpacity: 0.95,
         }).bindPopup(`<b>${esc(p.guia_numero)}</b><br>${esc(p.destinatario_nombre)}<br>${esc(p.direccion)}<br>${badge(p.estado)}${p.conductor ? `<br>🚚 ${esc(p.conductor)}` : ''}<br><a href="#/ordenes?id=${p.id}">Ver orden</a>`).addTo(capa);
       }
-      $('#mcount').textContent = `${datos.pedidos.length} pedidos activos`;
+      for (const m of datos.mensajeros || []) {
+        pts.push([m.lat, m.lng]);
+        L.marker([m.lat, m.lng], { icon: L.divIcon({ className: '', html: `<div class="pin-moto" title="${esc(m.nombre)}">🚚<b>${esc(m.nombre)}</b></div>`, iconSize: [90, 28], iconAnchor: [14, 14] }), zIndexOffset: 1000 })
+          .bindPopup(`<b>${esc(m.nombre)}</b><br>Última ubicación: ${fmtFechaHora(m.actualizado_en)}`).addTo(capa);
+      }
+      $('#mcount').textContent = `${datos.pedidos.length} pedidos activos · ${(datos.mensajeros || []).length} mensajeros con GPS`;
       if (pts.length > 1) mapa.fitBounds(pts, { padding: [40, 40], maxZoom: 14 });
     };
     pintar(d);
@@ -464,7 +469,14 @@
             <dt>Pedido del cliente</dt><dd class="mono">${esc(p.pedido_oms_id)}</dd>
             <dt>Rastreo</dt><dd><a href="${esc(p.tracking_url)}" target="_blank" rel="noopener">Abrir página pública</a></dd>
             ${p.receptor_nombre ? `<dt>Recibió</dt><dd>${esc(p.receptor_nombre)}</dd>` : ''}
-            ${p.evidencia_foto_url ? `<dt>Evidencia</dt><dd><a href="${esc(p.evidencia_foto_url)}" target="_blank" rel="noopener">Ver foto</a></dd>` : ''}
+            ${p.entregado_en ? `<dt>Entregado</dt><dd>${fmtFechaHora(p.entregado_en)}${p.recaudo_confirmado ? ' · <b>recaudo confirmado</b>' : ''}</dd>` : ''}
+          </dl>
+          ${p.evidencia_foto_url || p.evidencia_firma_url || p.novedad_foto_url ? `<div class="row" style="margin-top:12px;align-items:flex-start">
+            ${p.evidencia_foto_url ? `<a href="${esc(p.evidencia_foto_url)}" target="_blank" rel="noopener"><img src="${esc(p.evidencia_foto_url)}" alt="Foto de entrega" style="width:150px;height:150px;object-fit:cover;border-radius:10px;border:1px solid var(--line)"></a>` : ''}
+            ${p.evidencia_firma_url ? `<a href="${esc(p.evidencia_firma_url)}" target="_blank" rel="noopener"><img src="${esc(p.evidencia_firma_url)}" alt="Firma" style="width:150px;height:150px;object-fit:contain;border-radius:10px;border:1px solid var(--line);background:#fff"></a>` : ''}
+            ${p.novedad_foto_url ? `<a href="${esc(p.novedad_foto_url)}" target="_blank" rel="noopener"><img src="${esc(p.novedad_foto_url)}" alt="Foto de la novedad" style="width:150px;height:150px;object-fit:cover;border-radius:10px;border:1px solid var(--line)"></a>` : ''}
+          </div>` : ''}
+          <dl class="kv" style="display:none">
           </dl></div>
           <div class="sec"><h4>Historial</h4><ul class="timeline">${(p.historial || []).slice().reverse().map((h) => `<li><b>${esc((ESTADOS[h.estado] || [h.estado])[0])}</b><div class="muted small">${fmtFechaHora(h.creado_en)}</div></li>`).join('') || '<li class="muted">Sin eventos</li>'}</ul></div>
         </div>`;
@@ -585,16 +597,17 @@
     const lista = await conductores(true);
     const fil = { nombre: '', telefono: '', placa: '', tipo: '' };
     c.innerHTML = `<div class="row" style="margin-bottom:14px"><span class="muted grow" id="mcnt"></span><button class="btn btn-primary" id="nuevo">${icon('plus')} Nuevo mensajero</button></div>
-      <div class="card"><div class="table-wrap"><table class="tbl"><thead><tr><th>Nombre</th><th>Teléfono</th><th>Placa</th><th>Tipo de vehículo</th><th>Zona</th><th class="num">Capacidad</th><th>Activo</th><th></th></tr>
+      <div class="card"><div class="table-wrap"><table class="tbl"><thead><tr><th>Nombre</th><th>Teléfono</th><th>Placa</th><th>Tipo de vehículo</th><th>Zona</th><th class="num">Capacidad</th><th>App</th><th>Activo</th><th></th></tr>
       <tr class="tbl-filters"><td><input class="input" data-f="nombre" placeholder="Buscar"></td><td><input class="input" data-f="telefono" placeholder="Buscar"></td><td><input class="input" data-f="placa" placeholder="Buscar"></td>
-      <td><select class="input" data-f="tipo"><option value="">Todos</option>${VEHICULOS.map((v) => `<option>${v}</option>`).join('')}</select></td><td></td><td></td><td></td><td></td></tr></thead><tbody id="mtb"></tbody></table></div></div>`;
+      <td><select class="input" data-f="tipo"><option value="">Todos</option>${VEHICULOS.map((v) => `<option>${v}</option>`).join('')}</select></td><td></td><td></td><td></td><td></td><td></td></tr></thead><tbody id="mtb"></tbody></table></div></div>`;
     const pintar = () => {
       const f = lista.filter((m) => (m.nombre || '').toLowerCase().includes(fil.nombre) && (m.telefono || '').includes(fil.telefono) && (m.placa || '').toLowerCase().includes(fil.placa) && (!fil.tipo || m.tipo_vehiculo === fil.tipo));
       $('#mcnt').textContent = `${lista.filter((m) => m.activo).length} activos de ${lista.length}`;
       $('#mtb').innerHTML = f.length ? f.map((m) => `<tr>
         <td><b>${esc(m.nombre)}</b>${m.email ? `<div class="muted small">${esc(m.email)}</div>` : ''}</td><td>${esc(m.telefono || '—')}</td><td class="mono">${esc(m.placa || '—')}</td><td>${esc(m.tipo_vehiculo || '—')}</td><td>${esc(m.zona || 'Cualquiera')}</td><td class="num">${esc(m.capacidad_kg)} kg</td>
+        <td>${m.tiene_pin ? `<span class="badge b-green">Con PIN</span>${m.ultima_ubicacion_en ? `<div class="muted small">GPS ${fmtFechaHora(m.ultima_ubicacion_en)}</div>` : ''}` : '<span class="badge b-gray">Sin PIN</span>'}</td>
         <td><label class="switch"><input type="checkbox" data-act="${m.id}" ${m.activo ? 'checked' : ''}><span></span></label></td>
-        <td><button class="btn btn-sm icon-btn" data-ed="${m.id}" aria-label="Editar">${icon('edit')}</button></td></tr>`).join('') : '<tr><td colspan="8"><div class="empty">No hay mensajeros. Crea el primero.</div></td></tr>';
+        <td><button class="btn btn-sm icon-btn" data-ed="${m.id}" aria-label="Editar">${icon('edit')}</button></td></tr>`).join('') : '<tr><td colspan="9"><div class="empty">No hay mensajeros. Crea el primero.</div></td></tr>';
       $$('[data-act]').forEach((cb) => (cb.onchange = async () => {
         try { const r = await api('PATCH', `/conductores/${cb.dataset.act}`, { activo: cb.checked }); Object.assign(lista.find((m) => m.id === r.id), r); S.conductores = lista; pintar(); toast(cb.checked ? 'Mensajero activado' : 'Mensajero desactivado'); } catch (e) { cb.checked = !cb.checked; fallo(e); }
       }));
@@ -615,11 +628,15 @@
       <div class="field"><label>Tipo de vehículo</label><select class="input" name="tipo_vehiculo"><option value="">—</option>${VEHICULOS.map((t) => `<option ${v.tipo_vehiculo === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
       <div class="field"><label>Zona</label><select class="input" name="zona"><option value="">Cualquier zona</option>${ZONAS.map((z) => `<option ${v.zona === z ? 'selected' : ''}>${z}</option>`).join('')}</select></div>
       <div class="field"><label>Capacidad (kg)</label><input class="input" name="capacidad_kg" type="number" min="1" value="${esc(v.capacidad_kg)}"></div>
+      <div class="field span-2"><label>PIN de la app (4 a 6 números)${v.tiene_pin ? ' — déjalo vacío para no cambiarlo' : ''}</label><input class="input" name="pin" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off" placeholder="${v.tiene_pin ? '••••' : 'Ej: 4821'}"></div>
+      <div class="span-2 alert alert-warn small">El mensajero entra a <b>${esc(location.origin)}/app</b> con su celular (el de arriba) y este PIN.</div>
     </div></div><div class="modal-foot"><button type="button" class="btn" data-cerrar>Cancelar</button><button class="btn btn-primary">Guardar</button></div></form>`);
     $('form', md.el).onsubmit = async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.target));
       f.placa = (f.placa || '').toUpperCase();
+      if (!f.pin) delete f.pin;
+      if (!m && !f.telefono) return toast('El celular es necesario para que el mensajero entre a la app', true);
       await conBoton($('.btn-primary', md.el), async () => {
         if (m) await api('PATCH', `/conductores/${m.id}`, f); else await api('POST', '/conductores', f);
         md.cerrar(); S.conductores = null; toast('Mensajero guardado'); listo();

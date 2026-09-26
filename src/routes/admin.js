@@ -92,9 +92,13 @@ function adminRouter(deps) {
   r.get('/mapa', async (_req, res) => {
     const [pedidos, bodega, conductores] = await Promise.all([db.pedidosActivos(), db.bodegaPrincipal(), db.listarConductores()]);
     const nombres = Object.fromEntries(conductores.map((c) => [c.id, c.nombre]));
+    const hace2h = now().getTime() - 2 * 3600e3;
     res.json({
       deposito: bodega?.lat ? { lat: Number(bodega.lat), lng: Number(bodega.lng), nombre: bodega.nombre } : { ...config.deposito, nombre: 'Bodega' },
       pedidos: pedidos.filter((p) => p.lat).map((p) => ({ ...p, conductor: nombres[p.conductor_id] || null })),
+      mensajeros: conductores
+        .filter((c) => c.activo && c.ultima_lat && Date.parse(c.ultima_ubicacion_en) > hace2h)
+        .map((c) => ({ id: c.id, nombre: c.nombre, lat: Number(c.ultima_lat), lng: Number(c.ultima_lng), actualizado_en: c.ultima_ubicacion_en })),
     });
   });
 
@@ -180,17 +184,24 @@ function adminRouter(deps) {
   const camposConductor = (b) => {
     const f = {};
     for (const k of ['nombre', 'telefono', 'email', 'placa', 'tipo_vehiculo', 'zona']) if (k in b) f[k] = texto(b[k]) || null;
+    if (f.telefono) f.telefono = f.telefono.replace(/\D/g, '').slice(-10) || null;
     if ('capacidad_kg' in b) f.capacidad_kg = Number(b.capacidad_kg) || 50;
     if ('activo' in b) f.activo = Boolean(b.activo);
+    if (b.pin) {
+      if (!/^\d{4,6}$/.test(String(b.pin))) throw req400('El PIN debe tener entre 4 y 6 números');
+      f.pin_hash = hashPassword(String(b.pin));
+    }
     return f;
   };
-  r.get('/conductores', async (_req, res) => res.json(await db.listarConductores()));
+  // Nunca se envía el PIN (ni su huella) al navegador
+  const publico = ({ pin_hash, ...c }) => ({ ...c, tiene_pin: Boolean(pin_hash) });
+  r.get('/conductores', async (_req, res) => res.json((await db.listarConductores()).map(publico)));
   r.post('/conductores', async (req, res) => {
     const f = camposConductor(req.body || {});
     if (!f.nombre) throw req400('El nombre es requerido');
-    res.status(201).json(await db.crearConductor({ activo: true, ...f }));
+    res.status(201).json(publico(await db.crearConductor({ activo: true, ...f })));
   });
-  r.patch('/conductores/:id', async (req, res) => res.json(await db.actualizarConductor(req.params.id, camposConductor(req.body || {}))));
+  r.patch('/conductores/:id', async (req, res) => res.json(publico(await db.actualizarConductor(req.params.id, camposConductor(req.body || {})))));
 
   // ── Rutero ────────────────────────────────────────────────────────────
   r.get('/viajes', async (req, res) => res.json(await db.listarViajes(req.query.fecha || fechaHoyColombia(now()))));

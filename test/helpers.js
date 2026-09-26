@@ -55,6 +55,13 @@ function fakeDb() {
     actualizarWebhook: async (id, c) => Object.assign(s.cola.find((w) => w.id === id), c),
     subirPdf: async (ruta, buf) => { s.pdfs[ruta] = buf; return `https://cdn.test/guias/${ruta}`; },
 
+    // App del mensajero
+    conductoresPorTelefono: async (t10) => s.conductores.filter((c) => c.activo && String(c.telefono || '').endsWith(t10)),
+    conductorPorId: async (id) => s.conductores.find((c) => c.id === id) || null,
+    viajesDeConductor: async (cid) => s.viajes.filter((v) => v.conductor_id === cid && v.estado !== 'cancelado'),
+    pedidosDeConductor: async (cid) => s.pedidos.filter((p) => p.conductor_id === cid && ['asignado', 'en_ruta', 'entregado', 'novedad', 'devuelto'].includes(p.estado)),
+    subirArchivo: async (ruta, buf, tipo) => { s.archivos = s.archivos || {}; s.archivos[ruta] = { buf, tipo }; return `https://cdn.test/${ruta}`; },
+
     // Panel
     usuarioPorEmail: async (e) => s.usuarios.find((u) => u.email === e && u.activo) || null,
     listarUsuarios: async () => s.usuarios.map(({ password_hash, ...u }) => u),

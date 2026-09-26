@@ -83,6 +83,29 @@ function createDb({ url, serviceKey, bucketGuias }) {
       return q(sb.from('webhook_pendientes').update(cambios).eq('id', id));
     },
 
+    // ── App del mensajero ──────────────────────────────────────────────────
+    async conductoresPorTelefono(ultimos10) {
+      return q(sb.from('conductores').select('*').eq('activo', true).like('telefono', `%${ultimos10}`));
+    },
+    async conductorPorId(id) {
+      return q(sb.from('conductores').select('*').eq('id', id).maybeSingle());
+    },
+    async viajesDeConductor(conductorId, fecha) {
+      return q(sb.from('viajes').select('*').eq('conductor_id', conductorId).eq('fecha', fecha).in('estado', ['planificado', 'en_curso', 'finalizado']).order('creado_en'));
+    },
+    async pedidosDeConductor(conductorId, desdeIso) {
+      const campos = 'id, guia_numero, pedido_oms_id, estado, zona, lat, lng, destinatario, entrega, paquete, servicio, viaje_id, novedad_tipo, receptor_nombre, actualizado_en';
+      const [pendientes, hoy] = await Promise.all([
+        q(sb.from('pedidos').select(campos).eq('conductor_id', conductorId).in('estado', ['asignado', 'en_ruta'])),
+        q(sb.from('pedidos').select(campos).eq('conductor_id', conductorId).in('estado', ['entregado', 'novedad', 'devuelto']).gte('actualizado_en', desdeIso)),
+      ]);
+      return [...pendientes, ...hoy];
+    },
+    async subirArchivo(ruta, buffer, contentType) {
+      await q(sb.storage.from(bucketGuias).upload(ruta, buffer, { contentType, upsert: true }));
+      return sb.storage.from(bucketGuias).getPublicUrl(ruta).data.publicUrl;
+    },
+
     // ── Panel: usuarios ────────────────────────────────────────────────────
     async usuarioPorEmail(email) {
       return q(sb.from('usuarios').select('*').eq('email', email.toLowerCase().trim()).eq('activo', true).maybeSingle());

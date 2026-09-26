@@ -147,6 +147,8 @@ table.tbl { width: 100%; border-collapse: collapse; }
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: -1px; }
 .pin { width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); display: grid; place-items: center; }
 .pin b { transform: rotate(45deg); color: #fff; font-size: 11px; font-weight: 700; }
+.pin-moto { display: inline-flex; align-items: center; gap: 4px; background: var(--navy); color: #fff; border: 2px solid var(--lime); border-radius: 999px; padding: 2px 8px 2px 4px; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+.pin-moto b { font-size: 11px; }
 .pin-depot { width: 30px; height: 30px; border-radius: 8px; background: var(--navy); color: var(--lime); display: grid; place-items: center; font-weight: 800; font-size: 11px; border: 2px solid var(--lime); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
 
 /* Drawer y modal */
