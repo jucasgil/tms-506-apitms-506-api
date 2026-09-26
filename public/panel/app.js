@@ -653,14 +653,16 @@
         <span class="grow"></span>
         <button class="btn" id="rref">${icon('refresh')} Actualizar</button>
         <button class="btn btn-primary" id="ropt">${icon('route')} Optimizar rutas</button></div>
-        <div class="card-pad small muted" style="padding-top:12px;padding-bottom:12px">"Optimizar rutas" toma los pedidos por asignar, los reparte entre los mensajeros activos por zona y capacidad, y ordena las paradas de cada uno con Google (máximo 25 paradas por ruta).</div>
+        <div class="card-pad small muted" style="padding-top:12px;padding-bottom:12px">"Optimizar rutas" te pregunta qué mensajeros salen hoy, reparte entre ellos los pedidos por asignar según zona y capacidad, y ordena las paradas de cada uno con Google (máximo 25 por ruta). Luego puedes cambiar el mensajero de cualquier ruta.</div>
         <div id="rres"></div></div>
       <div class="rutero"><div class="viajes" id="rv"></div><div class="card"><div id="rmap" class="map map-lg" style="border-radius:var(--radius)"></div></div></div>`;
     const md = await api('GET', '/mapa');
     const mapa = crearMapa($('#rmap'), md.deposito);
     const capa = L.layerGroup().addTo(mapa);
     const cargar = async () => {
-      const viajes = (await api('GET', `/viajes?fecha=${fechaRutero}`)).filter((v) => v.estado !== 'cancelado');
+      const [todos, cs] = await Promise.all([api('GET', `/viajes?fecha=${fechaRutero}`), conductores(true)]);
+      const viajes = todos.filter((v) => v.estado !== 'cancelado');
+      const activosR = cs.filter((m) => m.activo);
       capa.clearLayers();
       marcadorBodega(md.deposito).addTo(capa);
       const pts = [[md.deposito.lat, md.deposito.lng]];
@@ -687,6 +689,7 @@
             ${v.estado === 'en_curso' ? `<button class="btn btn-sm" data-fin="${v.id}">Finalizar ruta</button>` : ''}
             <a class="btn btn-sm" href="#/ordenes?conductor_id=${v.conductor_id}&estado=asignado,en_ruta">Ver órdenes</a>
           </div>
+          ${['planificado', 'en_curso'].includes(v.estado) ? `<div class="btns"><select class="input" data-cmsel="${v.id}" style="flex:1;min-height:34px;padding:5px 10px">${activosR.map((m) => `<option value="${m.id}" ${m.id === v.conductor_id ? 'selected' : ''}>${esc(m.nombre)}${m.zona ? ` · ${esc(m.zona)}` : ''}</option>`).join('')}</select><button class="btn btn-sm" data-cm="${v.id}">Cambiar mensajero</button></div>` : ''}
           <details><summary class="small" style="padding:0 16px 10px;cursor:pointer;font-weight:600">Orden de paradas</summary><ol>${(v.secuencia || []).map((s) => `<li><span class="mono">${esc(s.guia_numero)}</span> · ${esc(s.direccion || '')}</li>`).join('')}</ol></details>
         </div>`).join('') : `<div class="card card-pad empty">No hay rutas para esta fecha.<br><br>Pulsa <b>Optimizar rutas</b> para armarlas con los pedidos por asignar.</div>`;
       $$('[data-ini]').forEach((b) => (b.onclick = async () => {
@@ -698,11 +701,17 @@
         conBoton(b, async () => { const r = await api('POST', `/viajes/${b.dataset.can}/cancelar`); toast(`${r.pedidos_liberados} pedidos liberados`); await cargar(); });
       }));
       $$('[data-fin]').forEach((b) => (b.onclick = () => conBoton(b, async () => { await api('POST', `/viajes/${b.dataset.fin}/finalizar`); toast('Ruta finalizada'); await cargar(); })));
+      $$('[data-cm]').forEach((b) => (b.onclick = () => {
+        const cid = $(`[data-cmsel="${b.dataset.cm}"]`).value;
+        const v = viajes.find((x) => x.id === b.dataset.cm);
+        if (cid === v.conductor_id) return toast('Ese mensajero ya tiene esta ruta');
+        conBoton(b, async () => { const r = await api('POST', `/viajes/${b.dataset.cm}/mensajero`, { conductor_id: cid }); toast(`Ruta pasada a ${r.mensajero} (${r.pedidos_movidos} pedidos)`); await cargar(); });
+      }));
     };
     $('#rf').onchange = (e) => { fechaRutero = e.target.value; $('#rres').innerHTML = ''; cargar().catch(fallo); };
     $('#rref').onclick = (e) => conBoton(e.currentTarget, cargar);
-    $('#ropt').onclick = (e) => conBoton(e.currentTarget, async () => {
-      const r = await api('POST', '/rutas/optimizar', { fecha: fechaRutero });
+    const optimizar = async (btn, ids) => conBoton(btn, async () => {
+      const r = await api('POST', '/rutas/optimizar', { fecha: fechaRutero, conductor_ids: ids });
       const pl = (n, uno, varios) => `<b>${n}</b> ${n === 1 ? uno : varios}`;
       const paradas = r.viajes.reduce((a, v) => a + v.paradas, 0);
       const partes = [`${pl(r.viajes.length, 'ruta nueva', 'rutas nuevas')} con ${pl(paradas, 'parada', 'paradas')}`];
@@ -711,6 +720,24 @@
       $('#rres').innerHTML = `<div class="card-pad" style="padding-top:0"><div class="alert ${r.errores.length ? 'alert-err' : r.sin_asignar.length ? 'alert-warn' : 'alert-ok'}">${partes.join(' · ')}${r.errores.map((x) => `<br>${esc(x.conductor)}: ${esc(x.error)}`).join('')}</div></div>`;
       await cargar();
     });
+    $('#ropt').onclick = async () => {
+      const activos = (await conductores(true)).filter((m) => m.activo);
+      if (!activos.length) return toast('No hay mensajeros activos. Créalos en Mensajeros.', true);
+      const m = abrirCapa(`${cabecera('¿Quiénes salen a ruta?', 'Los pedidos por asignar se repartirán solo entre los mensajeros marcados')}
+        <form><div class="modal-body"><label class="check" style="margin-bottom:10px"><input type="checkbox" id="todos" checked> <b>Todos</b></label>
+        <div style="display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto">${activos.map((c) => `<label class="check" style="border:1px solid var(--line);border-radius:10px;padding:10px 12px"><input type="checkbox" name="c" value="${c.id}" checked> <span class="grow"><b>${esc(c.nombre)}</b><div class="muted small">${esc(c.tipo_vehiculo || 'Vehículo')} · Zona ${esc(c.zona || 'cualquiera')} · ${esc(c.capacidad_kg)} kg</div></span></label>`).join('')}</div></div>
+        <div class="modal-foot"><button type="button" class="btn" data-cerrar>Cancelar</button><button class="btn btn-primary">${icon('route')} Optimizar rutas</button></div></form>`);
+      const cajas = $$('input[name=c]', m.el);
+      $('#todos', m.el).onchange = (e) => cajas.forEach((c) => (c.checked = e.target.checked));
+      cajas.forEach((c) => (c.onchange = () => ($('#todos', m.el).checked = cajas.every((x) => x.checked))));
+      $('form', m.el).onsubmit = async (e) => {
+        e.preventDefault();
+        const ids = cajas.filter((c) => c.checked).map((c) => c.value);
+        if (!ids.length) return toast('Marca al menos un mensajero', true);
+        m.cerrar();
+        await optimizar($('#ropt'), ids);
+      };
+    };
     await cargar();
   }
 

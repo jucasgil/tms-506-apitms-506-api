@@ -207,7 +207,22 @@ function adminRouter(deps) {
   r.get('/viajes', async (req, res) => res.json(await db.listarViajes(req.query.fecha || fechaHoyColombia(now()))));
 
   r.post('/rutas/optimizar', async (req, res) => {
-    res.json(await planificarRutas({ db, ordenarParadas, config }, req.body?.fecha || fechaHoyColombia(now())));
+    const ids = Array.isArray(req.body?.conductor_ids) ? req.body.conductor_ids : undefined;
+    if (ids && !ids.length) throw req400('Elige al menos un mensajero');
+    res.json(await planificarRutas({ db, ordenarParadas, config }, req.body?.fecha || fechaHoyColombia(now()), { conductorIds: ids }));
+  });
+
+  // Cambiar el mensajero de una ruta (antes o después de salir)
+  r.post('/viajes/:id/mensajero', async (req, res) => {
+    const v = await db.viajePorId(req.params.id);
+    if (!v) throw errores.noEncontrado('Viaje no encontrado');
+    if (!['planificado', 'en_curso'].includes(v.estado)) throw req400('Esta ruta ya terminó o fue deshecha');
+    const cid = req.body?.conductor_id;
+    const c = (await db.listarConductores()).find((x) => x.id === cid && x.activo);
+    if (!c) throw req400('Elige un mensajero activo');
+    const pedidos = await db.actualizarPedidosDeViaje(v.id, ['asignado', 'en_ruta'], { conductor_id: c.id });
+    await db.actualizarViaje(v.id, { conductor_id: c.id });
+    res.json({ ok: true, mensajero: c.nombre, pedidos_movidos: pedidos.length });
   });
 
   r.post('/viajes/:id/iniciar', async (req, res) => {

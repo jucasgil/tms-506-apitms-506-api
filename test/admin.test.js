@@ -121,3 +121,29 @@ test('sellers, bodegas y usuarios: solo admin, llave visible una sola vez', asyn
   assert.equal((await sesion(req, 'despacho@506.co', 'nueva-clave-123')).r.status, 200);
   assert.equal(db.s.usuarios.length, 2);
 });
+
+test('rutero: elegir mensajeros que salen y cambiar el mensajero de una ruta', async (t) => {
+  const { app, db } = crearEntorno();
+  const { req, cerrar } = await servidor(app);
+  t.after(cerrar);
+  const { h } = await sesion(req);
+  await req('POST', '/v1/pedidos', { body: pedidoValido(), headers: { 'X-API-Key': API_KEY } });
+  await req('POST', '/v1/pedidos', { body: pedidoValido({ pedido_id: 'ORD-2', entrega: { direccion: 'Calle 40 Sur # 70-10', ciudad: 'Bogotá', departamento: 'Cundinamarca' } }), headers: { 'X-API-Key': API_KEY } });
+
+  assert.equal((await req('POST', '/v1/admin/rutas/optimizar', { body: { conductor_ids: [] }, headers: h })).status, 400);
+  // Solo sale Ana (zona Sur): se lleva también el pedido del Norte
+  const opt = await req('POST', '/v1/admin/rutas/optimizar', { body: { conductor_ids: ['c2'] }, headers: h });
+  assert.equal(opt.body.viajes.length, 1);
+  assert.equal(opt.body.viajes[0].conductor, 'Ana Gómez');
+  assert.ok(db.s.pedidos.every((p) => p.conductor_id === 'c2'));
+
+  const v = db.s.viajes[0];
+  await req('POST', `/v1/admin/viajes/${v.id}/iniciar`, { headers: h });
+  const cam = await req('POST', `/v1/admin/viajes/${v.id}/mensajero`, { body: { conductor_id: 'c1' }, headers: h });
+  assert.equal(cam.body.mensajero, 'Carlos Ramírez');
+  assert.equal(cam.body.pedidos_movidos, 2);
+  assert.equal(v.conductor_id, 'c1');
+  assert.ok(db.s.pedidos.every((p) => p.conductor_id === 'c1' && p.estado === 'en_ruta'));
+  assert.equal((await req('POST', `/v1/admin/viajes/${v.id}/mensajero`, { body: { conductor_id: 'nadie' }, headers: h })).status, 400);
+});
+

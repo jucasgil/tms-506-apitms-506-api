@@ -2,14 +2,15 @@
 // La usan el panel (Rutero) y el endpoint interno.
 const { asignarPedidos } = require('./asignacion');
 
-async function planificarRutas({ db, ordenarParadas, config }, fecha) {
+async function planificarRutas({ db, ordenarParadas, config }, fecha, { conductorIds } = {}) {
   const [pedidos, conductores, bodega] = await Promise.all([
     db.pedidosParaRutear(fecha),
     db.conductoresActivos(),
     db.bodegaPrincipal ? db.bodegaPrincipal() : null,
   ]);
   const deposito = bodega?.lat ? { lat: Number(bodega.lat), lng: Number(bodega.lng) } : config.deposito;
-  const { rutas, sinAsignar } = asignarPedidos(pedidos, conductores, { maxParadas: config.rutas.maxParadas });
+  const elegidos = Array.isArray(conductorIds) && conductorIds.length ? conductores.filter((c) => conductorIds.includes(c.id)) : conductores;
+  const { rutas, sinAsignar } = asignarPedidos(pedidos, elegidos, { maxParadas: config.rutas.maxParadas });
 
   const viajes = [];
   const errores = [];
