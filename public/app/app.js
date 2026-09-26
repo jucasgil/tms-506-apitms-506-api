@@ -158,7 +158,7 @@
   // ── Ingreso ───────────────────────────────────────────────────────────
   function vistaLogin(app) {
     app.innerHTML = `<div class="login">
-      <div class="top"><span class="mark">506</span><b>Mensajeros</b></div>
+      <div class="top"><img class="mark mark-lg" src="/brand/logo-506-blanco.svg" alt="506 Logistics"><span class="tag-tms">Mensajeros</span></div>
       <h1>Tu ruta,<br><em>en tu mano.</em></h1>
       <p>Ingresa con tu celular y el PIN que te dio el despachador.</p>
       <form novalidate>
@@ -186,7 +186,7 @@
 
   // ── Ruta del día ──────────────────────────────────────────────────────
   async function vistaRuta(app) {
-    app.innerHTML = `<header class="bar"><span class="mark">506</span><div class="grow"><h1>Mi ruta</h1><div class="sub">${esc(S.mensajero?.nombre)} · ${new Date().toLocaleDateString('es-CO', { timeZone: 'America/Bogota', weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
+    app.innerHTML = `<header class="bar"><img class="mark" src="/brand/logo-506-blanco.svg" alt="506 Logistics"><div class="grow"><h1>Mi ruta</h1><div class="sub">${esc(S.mensajero?.nombre)} · ${new Date().toLocaleDateString('es-CO', { timeZone: 'America/Bogota', weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
       <button class="iconbtn" id="ref" aria-label="Actualizar">${icon('refresh')}</button><button class="iconbtn" id="out" aria-label="Salir">${icon('out')}</button></header>
       <div class="wrap" id="w"><div class="loading"><span class="spin"></span></div></div>`;
     $('#out').onclick = () => { if (confirm('¿Cerrar sesión en este celular?')) salir(); };
@@ -325,7 +325,7 @@
     const cv = $('canvas', cont);
     const ctx = cv.getContext('2d');
     let dibujando = false, trazos = 0;
-    const ajustar = () => { const r = cv.getBoundingClientRect(); const d = window.devicePixelRatio || 1; cv.width = r.width * d; cv.height = r.height * d; ctx.scale(d, d); ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0B1F33'; };
+    const ajustar = () => { const r = cv.getBoundingClientRect(); const d = window.devicePixelRatio || 1; cv.width = r.width * d; cv.height = r.height * d; ctx.scale(d, d); ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#12142b'; };
     requestAnimationFrame(ajustar);
     const pt = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
     cv.addEventListener('pointerdown', (e) => { dibujando = true; cv.setPointerCapture(e.pointerId); ctx.beginPath(); ctx.moveTo(...pt(e)); $('.hint', cont).classList.add('hidden'); });

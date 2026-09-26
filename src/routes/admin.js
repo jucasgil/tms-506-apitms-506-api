@@ -160,6 +160,10 @@ function adminRouter(deps) {
         if (!CANCELABLES.includes(p.estado)) throw req400(`No se puede cancelar un pedido en estado "${p.estado}"`);
         cambios = { estado: 'cancelado', conductor_id: null, viaje_id: null };
         break;
+      case 'liberar':
+        if (!['asignado', 'en_ruta', 'novedad', 'reagendado'].includes(p.estado)) throw req400(`No se puede devolver un pedido en estado "${p.estado}"`);
+        cambios = { estado: 'guia_generada', conductor_id: null, viaje_id: null, fecha_programada: null };
+        break;
       case 'revisado':
         cambios = { requiere_revision: false };
         break;
@@ -237,8 +241,9 @@ function adminRouter(deps) {
   r.post('/viajes/:id/cancelar', async (req, res) => {
     const v = await db.viajePorId(req.params.id);
     if (!v) throw errores.noEncontrado('Viaje no encontrado');
-    if (v.estado !== 'planificado') throw req400('Solo se puede deshacer un viaje que no ha salido');
-    const pedidos = await db.actualizarPedidosDeViaje(v.id, ['asignado'], { estado: 'guia_generada', conductor_id: null, viaje_id: null });
+    if (v.estado === 'cancelado') throw req400('Esta ruta ya fue deshecha');
+    // Los pedidos no entregados vuelven a "por asignar"; los entregados no se tocan
+    const pedidos = await db.actualizarPedidosDeViaje(v.id, ['asignado', 'en_ruta', 'novedad', 'reagendado'], { estado: 'guia_generada', conductor_id: null, viaje_id: null, fecha_programada: null });
     await db.actualizarViaje(v.id, { estado: 'cancelado' });
     res.json({ ok: true, pedidos_liberados: pedidos.length });
   });

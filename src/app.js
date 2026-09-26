@@ -33,6 +33,11 @@ function createApp(deps) {
   app.use('/v1/app', appRouter(deps));
   app.use(rastreoRouter(deps));
 
+  // Logo, favicon e íconos de 506 Logistics (compartidos por panel, app y rastreo)
+  const marca = path.join(__dirname, '..', 'public', 'brand');
+  app.use('/brand', express.static(marca, { maxAge: '7d' }));
+  app.get('/favicon.ico', (_req, res) => res.sendFile(path.join(marca, 'favicon-32.png')));
+
   // Panel web del TMS
   const panel = path.join(__dirname, '..', 'public', 'panel');
   app.get('/', (_req, res) => res.redirect('/panel'));

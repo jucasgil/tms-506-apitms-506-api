@@ -147,3 +147,29 @@ test('rutero: elegir mensajeros que salen y cambiar el mensajero de una ruta', a
   assert.equal((await req('POST', `/v1/admin/viajes/${v.id}/mensajero`, { body: { conductor_id: 'nadie' }, headers: h })).status, 400);
 });
 
+test('pruebas y operación: deshacer ruta en curso y devolver pedidos a por asignar', async (t) => {
+  const { app, db } = crearEntorno();
+  const { req, cerrar } = await servidor(app);
+  t.after(cerrar);
+  const { h } = await sesion(req);
+  for (const i of [1, 2, 3]) await req('POST', '/v1/pedidos', { body: pedidoValido({ pedido_id: `R-${i}` }), headers: { 'X-API-Key': API_KEY } });
+  await req('POST', '/v1/admin/rutas/optimizar', { body: { conductor_ids: ['c1'] }, headers: h });
+  const v = db.s.viajes[0];
+  await req('POST', `/v1/admin/viajes/${v.id}/iniciar`, { headers: h });
+  const [a, b, c] = db.s.pedidos;
+  await req('POST', `/v1/admin/pedidos/${a.id}/accion`, { body: { accion: 'entregado' }, headers: h });
+  await req('POST', `/v1/admin/pedidos/${b.id}/accion`, { body: { accion: 'liberar' }, headers: h });
+  assert.equal(b.estado, 'guia_generada');
+  assert.equal(b.conductor_id, null);
+  await req('POST', `/v1/admin/viajes/${v.id}/finalizar`, { headers: h });
+  const d = await req('POST', `/v1/admin/viajes/${v.id}/cancelar`, { headers: h });
+  assert.equal(d.status, 200);
+  assert.equal(d.body.pedidos_liberados, 1);
+  assert.equal(a.estado, 'entregado'); // lo entregado no cambia
+  assert.equal(c.estado, 'guia_generada');
+  assert.equal((await req('POST', `/v1/admin/pedidos/${a.id}/accion`, { body: { accion: 'liberar' }, headers: h })).status, 400);
+  // Se puede volver a generar la ruta con los pedidos liberados
+  const opt = await req('POST', '/v1/admin/rutas/optimizar', { body: {}, headers: h });
+  assert.equal(opt.body.viajes.reduce((s, x) => s + x.paradas, 0), 2);
+});
+

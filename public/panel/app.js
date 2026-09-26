@@ -23,7 +23,7 @@
     devuelto: ['Devuelto', 'b-red'],
     cancelado: ['Cancelado', 'b-gray'],
   };
-  const COLOR_ESTADO = { pendiente: '#8796A8', guia_generada: '#2F6BFF', reagendado: '#2F6BFF', asignado: '#7C5CFF', en_ruta: '#E6A100', novedad: '#FF7A1A' };
+  const COLOR_ESTADO = { pendiente: '#8a8f9e', guia_generada: '#2438d6', reagendado: '#2438d6', asignado: '#6A4CE0', en_ruta: '#C98A00', novedad: '#E8590C' };
   const NOVEDADES = {
     cliente_ausente: 'Cliente ausente', direccion_incorrecta: 'Dirección incorrecta', rehusado: 'Rehusado por el cliente',
     acceso_restringido: 'Acceso restringido', dano_paquete: 'Paquete dañado', otro: 'Otro',
@@ -31,7 +31,7 @@
   const ZONAS = ['Norte', 'Centro', 'Occidente', 'Sur'];
   const VEHICULOS = ['Moto', 'Carry 700 Kg', 'Camioneta', 'Furgón', 'Bicicleta'];
   const SERVICIOS = { estandar: 'Estándar', express: 'Express', same_day: 'Same day' };
-  const COLORES_RUTA = ['#2F6BFF', '#FF7A1A', '#1F9D55', '#7C5CFF', '#E5484D', '#0FA3B1', '#C79100', '#D6409F', '#3E4C59', '#7FA10C'];
+  const COLORES_RUTA = ['#2438d6', '#E8590C', '#1f8a4c', '#6A4CE0', '#D93A3A', '#0FA3B1', '#B8960C', '#D6409F', '#12142b', '#1D17A6'];
   const badge = (e) => { const [t, c] = ESTADOS[e] || [e, 'b-gray']; return `<span class="badge ${c}">${esc(t)}</span>`; };
 
   const I = {
@@ -188,10 +188,10 @@
     app.innerHTML = `
       <div class="layout">
         <aside class="sidebar">
-          <div class="brand"><div class="brand-mark">506</div><div class="brand-text">Transportadora<small>TMS · Panel de operación</small></div></div>
+          <div class="brand"><img class="brand-logo" src="/brand/logo-506-blanco.svg" alt="506 Logistics"><span class="tag-tms">TMS</span></div>
           <div class="nav-cta"><a href="#/nueva-orden" class="btn btn-lime btn-block">${icon('plus')} Nueva orden</a></div>
           <nav class="nav">${nav}</nav>
-          <div class="sidebar-foot">TMS 506 · v1.0</div>
+          <div class="sidebar-foot">506 Logistics · TMS v1.0</div>
         </aside>
         <div class="main">
           <header class="topbar">
@@ -225,9 +225,9 @@
     app.innerHTML = `
       <div class="login">
         <div class="login-art">
-          <div class="brand" style="padding:0"><div class="brand-mark">506</div><div class="brand-text">Transportadora<small>Logística de última milla</small></div></div>
+          <div class="brand" style="padding:0"><img class="brand-logo" src="/brand/logo-506-blanco.svg" alt="506 Logistics" style="height:42px"><span class="tag-tms">TMS</span></div>
           <div><h2>Cada pedido,<br><em>en su ruta.</em></h2><p>Recibe los pedidos de tus clientes, genera las guías, arma las rutas del día y sigue cada entrega desde un solo lugar.</p></div>
-          <div class="small" style="color:#6F86A0">TMS 506</div>
+          <div class="small" style="color:#6d73a8">© 506 Logistics S.A.S · Tecnología y logística para empresas</div>
           <div class="stripes"></div>
         </div>
         <div class="login-form">
@@ -440,6 +440,7 @@
       const fila = [];
       if (p.estado === 'asignado') fila.push(`<button class="btn" data-a="en_ruta">${icon('truck')} Despachar</button>`, '<button class="btn" data-a="desasignar">Quitar mensajero</button>');
       if (['asignado', 'en_ruta'].includes(p.estado)) fila.push('<button class="btn" data-a="entregado">✓ Marcar entregado</button>', '<button class="btn" data-a="novedad">Reportar novedad</button>');
+      if (['en_ruta', 'novedad', 'reagendado'].includes(p.estado)) fila.push('<button class="btn" data-a="liberar">Devolver a por asignar</button>');
       if (['pendiente', 'guia_generada', 'asignado', 'reagendado'].includes(p.estado)) fila.push('<button class="btn btn-danger" data-a="cancelar">Cancelar orden</button>');
       if (fila.length) acciones.push(`<div class="row">${fila.join('')}</div>`);
       d.el.querySelector('.drawer').innerHTML = `
@@ -493,6 +494,7 @@
           if (!cid) return toast('Elige un mensajero', true);
           return accion(b, { accion: 'asignar', conductor_id: cid });
         }
+        if (a === 'liberar' && !(await confirmar('Devolver a por asignar', 'El pedido sale de la ruta y del celular del mensajero, y queda listo para una nueva ruta.', { boton: 'Devolver' }))) return;
         if (a === 'cancelar' && !(await confirmar('Cancelar orden', `La guía <b>${esc(p.guia_numero)}</b> quedará anulada y se avisará al cliente.`, { boton: 'Cancelar orden', peligro: true }))) return;
         if (a === 'entregado') return modalEntrega(p, (body) => accion(b, body));
         if (a === 'novedad') return modalNovedad(p, (body) => accion(b, body));
@@ -687,6 +689,7 @@
           <div class="btns">
             ${v.estado === 'planificado' ? `<button class="btn btn-primary btn-sm" data-ini="${v.id}">${icon('truck')} Iniciar ruta</button><button class="btn btn-sm" data-can="${v.id}">Deshacer</button>` : ''}
             ${v.estado === 'en_curso' ? `<button class="btn btn-sm" data-fin="${v.id}">Finalizar ruta</button>` : ''}
+            ${['en_curso', 'finalizado'].includes(v.estado) ? `<button class="btn btn-sm" data-can="${v.id}">Deshacer</button>` : ''}
             <a class="btn btn-sm" href="#/ordenes?conductor_id=${v.conductor_id}&estado=asignado,en_ruta">Ver órdenes</a>
           </div>
           ${['planificado', 'en_curso'].includes(v.estado) ? `<div class="btns"><select class="input" data-cmsel="${v.id}" style="flex:1;min-height:34px;padding:5px 10px">${activosR.map((m) => `<option value="${m.id}" ${m.id === v.conductor_id ? 'selected' : ''}>${esc(m.nombre)}${m.zona ? ` · ${esc(m.zona)}` : ''}</option>`).join('')}</select><button class="btn btn-sm" data-cm="${v.id}">Cambiar mensajero</button></div>` : ''}
@@ -697,7 +700,7 @@
         conBoton(b, async () => { const r = await api('POST', `/viajes/${b.dataset.ini}/iniciar`); toast(`${r.pedidos_en_ruta} pedidos en ruta`); await cargar(); });
       }));
       $$('[data-can]').forEach((b) => (b.onclick = async () => {
-        if (!(await confirmar('Deshacer ruta', 'Los pedidos vuelven a quedar por asignar.', { boton: 'Deshacer', peligro: true }))) return;
+        if (!(await confirmar('Deshacer ruta', 'Los pedidos que no se entregaron vuelven a quedar por asignar. Los ya entregados no cambian.', { boton: 'Deshacer', peligro: true }))) return;
         conBoton(b, async () => { const r = await api('POST', `/viajes/${b.dataset.can}/cancelar`); toast(`${r.pedidos_liberados} pedidos liberados`); await cargar(); });
       }));
       $$('[data-fin]').forEach((b) => (b.onclick = () => conBoton(b, async () => { await api('POST', `/viajes/${b.dataset.fin}/finalizar`); toast('Ruta finalizada'); await cargar(); })));
